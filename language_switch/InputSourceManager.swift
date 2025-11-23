@@ -116,31 +116,63 @@ class InputSourceManager {
     
     // Apply a profile: Enable all in profile, disable others (except maybe system default?)
     // NOTE: macOS usually requires at least one input source to be enabled.
+    // Apply a profile: Enable all in profile, disable others (except maybe system default?)
+    // NOTE: macOS usually requires at least one input source to be enabled.
     func applyProfile(inputSourceIDs: [String]) {
-        _ = getAllAvailableInputSources()
+        print("Applying profile with IDs: \(inputSourceIDs)")
         
-        // 1. Enable all targets first to ensure we don't end up with 0 enabled
+        // 1. Enable all targets first
         for id in inputSourceIDs {
+            print("Enabling source: \(id)")
             enableInputSource(id: id)
         }
         
-        // 2. Disable ones not in the list
-        // We need to be careful not to disable the LAST remaining one if something goes wrong,
-        // but since we just enabled the target list, it should be fine.
-        // Also, we might want to check if the source is actually enabled before trying to disable it.
+        // 2. Switch to US English (or the first available source)
+        // This is CRITICAL: You cannot disable the currently selected input source.
+        // So we must switch to one of the new ones before disabling the old ones.
+        // User Request: Always switch to English if possible.
         
+        var targetSourceToSelect: TISInputSource?
+        
+        if inputSourceIDs.contains("com.apple.keylayout.US"),
+           let usSource = findInputSource(by: "com.apple.keylayout.US") {
+            targetSourceToSelect = usSource
+        } else if let firstId = inputSourceIDs.first, let source = findInputSource(by: firstId) {
+            targetSourceToSelect = source
+        }
+        
+        if let source = targetSourceToSelect {
+            print("Selecting source: \(InputSource.getID(from: source))")
+            TISSelectInputSource(source)
+        }
+        
+        // 3. Disable ones not in the list
         let enabledSources = getEnabledInputSources()
+        print("Currently enabled sources: \(enabledSources.map { $0.id })")
+        
         for source in enabledSources {
             if !inputSourceIDs.contains(source.id) {
-                disableInputSource(id: source.id)
+                print("Disabling source: \(source.id)")
+                // Fix: We need to get the actual TISInputSource object, not our struct
+                if let tisSource = findInputSource(by: source.id) {
+                    let status = TISDisableInputSource(tisSource)
+                    if status != noErr {
+                        print("Error disabling source \(source.id): \(status)")
+                    }
+                }
             }
         }
+        
+        // Double check result
+        let finalSources = getEnabledInputSources()
+        print("Final enabled sources: \(finalSources.map { $0.id })")
     }
     
     private func findInputSource(by id: String) -> TISInputSource? {
         let properties = [kTISPropertyInputSourceID: id] as CFDictionary
         guard let sourceList = TISCreateInputSourceList(properties, false).takeRetainedValue() as? [TISInputSource],
               let source = sourceList.first else {
+            print("Could not find input source with ID: \(id)")
             return nil
         }
         return source

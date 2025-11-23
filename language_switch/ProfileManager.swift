@@ -71,7 +71,22 @@ class ProfileManager: ObservableObject {
     func cycleToNextProfile() -> LanguageProfile? {
         guard !profiles.isEmpty else { return nil }
         
-        currentProfileIndex = (currentProfileIndex + 1) % profiles.count
+        // Find next valid profile (not named "New Profile")
+        var nextIndex = (currentProfileIndex + 1) % profiles.count
+        var attempts = 0
+        
+        while profiles[nextIndex].name == "New Profile" && attempts < profiles.count {
+            nextIndex = (nextIndex + 1) % profiles.count
+            attempts += 1
+        }
+        
+        // If all profiles are "New Profile", return nil or just the first one?
+        // Let's return nil to prevent switching if nothing is valid
+        if attempts >= profiles.count {
+            return nil
+        }
+        
+        currentProfileIndex = nextIndex
         UserDefaults.standard.set(currentProfileIndex, forKey: currentProfileIndexKey)
         
         return profiles[currentProfileIndex]
