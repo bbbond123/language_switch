@@ -110,11 +110,10 @@ class MenuBarManager: NSObject, ObservableObject {
     
     private func updateIcon() {
         // Update icon or text based on current profile
-        // For now just use a generic icon, but we could show "A" or "B" etc.
         if let profile = profileManager.getCurrentProfile() {
-             statusItem?.button?.title = String(profile.name.prefix(1))
+             statusItem?.button?.title = " " + profile.name
         } else {
-             statusItem?.button?.title = "?"
+             statusItem?.button?.title = " ?"
         }
     }
 }
