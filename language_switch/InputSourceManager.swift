@@ -142,35 +142,75 @@ class InputSourceManager {
         }
         
         if let source = targetSourceToSelect {
-            print("Selecting source: \(InputSource.getID(from: source))")
-            TISSelectInputSource(source)
+            let targetID = InputSource.getID(from: source)
+            print("Selecting source: \(targetID)")
+            let selectStatus = TISSelectInputSource(source)
+            if selectStatus != noErr {
+                print("Error selecting source \(targetID): \(selectStatus)")
+            }
+            
+            // Wait for selection to actually take effect
+            waitForSelection(of: targetID) {
+                self.disableUnwantedSources(inputSourceIDs: inputSourceIDs)
+            }
+        } else {
+            // If no switch needed (or failed to find target), just try to disable
+            disableUnwantedSources(inputSourceIDs: inputSourceIDs)
+        }
+    }
+    
+    private func waitForSelection(of targetID: String, attempts: Int = 0, completion: @escaping () -> Void) {
+        // Max wait: 10 attempts * 0.1s = 1.0 second
+        if attempts >= 10 {
+            print("Timeout waiting for source selection: \(targetID)")
+            completion()
+            return
         }
         
-        // 3. Disable ones not in the list
+        // Check if currently selected source matches targetID
+        let current = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+        let currentID = InputSource.getID(from: current)
+        
+        if currentID == targetID {
+            print("Source selection confirmed: \(targetID)")
+            completion()
+        } else {
+            print("Waiting for selection... Current: \(currentID), Target: \(targetID)")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.waitForSelection(of: targetID, attempts: attempts + 1, completion: completion)
+            }
+        }
+    }
+    
+    private func disableUnwantedSources(inputSourceIDs: [String]) {
         let enabledSources = getEnabledInputSources()
-        print("Currently enabled sources: \(enabledSources.map { $0.id })")
+        print("Currently enabled sources (before disable): \(enabledSources.map { $0.id })")
         
         for source in enabledSources {
             if !inputSourceIDs.contains(source.id) {
                 print("Disabling source: \(source.id)")
-                // Fix: We need to get the actual TISInputSource object, not our struct
                 if let tisSource = findInputSource(by: source.id) {
                     let status = TISDisableInputSource(tisSource)
                     if status != noErr {
                         print("Error disabling source \(source.id): \(status)")
+                    } else {
+                        print("Successfully called disable for \(source.id)")
                     }
                 }
             }
         }
         
         // Double check result
-        let finalSources = getEnabledInputSources()
-        print("Final enabled sources: \(finalSources.map { $0.id })")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            let finalSources = self.getEnabledInputSources()
+            print("Final enabled sources: \(finalSources.map { $0.id })")
+        }
     }
     
     private func findInputSource(by id: String) -> TISInputSource? {
+        // Fix: Use true for includeAllInstalled to find disabled sources too
         let properties = [kTISPropertyInputSourceID: id] as CFDictionary
-        guard let sourceList = TISCreateInputSourceList(properties, false).takeRetainedValue() as? [TISInputSource],
+        guard let sourceList = TISCreateInputSourceList(properties, true).takeRetainedValue() as? [TISInputSource],
               let source = sourceList.first else {
             print("Could not find input source with ID: \(id)")
             return nil
