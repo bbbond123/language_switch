@@ -117,7 +117,7 @@ class InputSourceManager {
     // Apply a profile: Enable all in profile, disable others (except maybe system default?)
     // NOTE: macOS usually requires at least one input source to be enabled.
     func applyProfile(inputSourceIDs: [String]) {
-        let allSources = getAllAvailableInputSources()
+        _ = getAllAvailableInputSources()
         
         // 1. Enable all targets first to ensure we don't end up with 0 enabled
         for id in inputSourceIDs {

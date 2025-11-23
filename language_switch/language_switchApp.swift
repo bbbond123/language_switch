@@ -13,10 +13,10 @@ struct language_switchApp: App {
     @StateObject private var menuBarManager = MenuBarManager()
     
     var body: some Scene {
-        // No WindowGroup, as this is a menu bar app.
-        // However, we need a Settings window that can be opened.
+        // No WindowGroup or Settings scene needed here as we manage it manually
+        // to avoid SwiftUI warnings and ensure correct behavior for Menu Bar apps.
         Settings {
-            SettingsView()
+            EmptyView()
         }
     }
 }
@@ -24,6 +24,7 @@ struct language_switchApp: App {
 class MenuBarManager: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
     private var profileManager = ProfileManager.shared
+    private var settingsWindow: NSWindow?
     
     override init() {
         super.init()
@@ -69,9 +70,15 @@ class MenuBarManager: NSObject, ObservableObject {
     private func showMenu() {
         let menu = NSMenu()
         
-        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
+        
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
         
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil) // Trigger the menu to show
@@ -79,14 +86,22 @@ class MenuBarManager: NSObject, ObservableObject {
     }
     
     @objc private func openSettings() {
-        if #available(macOS 13.0, *) {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        } else {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        if settingsWindow == nil {
+            let settingsView = SettingsView()
+            let hostingController = NSHostingController(rootView: settingsView)
+            
+            let window = NSWindow(contentViewController: hostingController)
+            window.title = "Language Switcher Settings"
+            window.setContentSize(NSSize(width: 600, height: 400))
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.center()
+            window.isReleasedWhenClosed = false
+            
+            settingsWindow = window
         }
         
-        // Fallback or force activate app to show window
         NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.makeKeyAndOrderFront(nil)
     }
     
     @objc private func quitApp() {
